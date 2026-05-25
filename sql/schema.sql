@@ -1,0 +1,17 @@
+-- SQLite schema for ESP-32 Smart Bridge Dashboard
+
+CREATE TABLE IF NOT EXISTS readings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL,
+  data TEXT NOT NULL,
+  critical INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL,
+  level TEXT NOT NULL,
+  message TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_readings_ts ON readings(ts);
