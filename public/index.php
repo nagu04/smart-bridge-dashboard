@@ -52,6 +52,8 @@
           <span class="status-dot"></span>
           ESP-32 Connected
         </div>
+        <div class="status-badge secondary" id="esp32Status">Status: OFFLINE</div>
+        <div class="status-badge secondary" id="lastSeen">Last update: --</div>
         <button class="btn btn-outline" id="seedBtn">+ Sample Data</button>
       </div>
     </nav>
@@ -82,24 +84,29 @@
               <p id="statusDesc">All systems nominal. Continuous monitoring active.</p>
             </div>
           </div>
+          <div class="status-meta" style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px;">
+            <div class="status-badge secondary">Gate: <strong id="gateStatus">CLOSED</strong></div>
+            <div class="status-badge secondary">ESP32: <strong id="esp32SystemStatus">OFFLINE</strong></div>
+            <div class="status-badge secondary">Last update: <strong id="lastSeen">--</strong></div>
+          </div>
         </div>
 
         <!-- Sensor Cards Grid -->
         <div class="cards-grid">
           
-          <!-- Flex Sensor Card -->
-          <div class="sensor-card" data-sensor="flex">
+          <!-- Stress Sensor Card -->
+          <div class="sensor-card" data-sensor="stress">
             <div class="sensor-header">
               <div class="sensor-title">
                 <div class="sensor-icon">📏</div>
-                Flex Sensor
+                Structural Stress
               </div>
-              <div class="sensor-status" id="flexStatus"></div>
+              <div class="sensor-status" id="stressStatus"></div>
             </div>
-            <div class="sensor-value" id="flexVal">--</div>
-            <div class="sensor-unit">mm strain</div>
+            <div class="sensor-value" id="stressVal">--</div>
+            <div class="sensor-unit">%</div>
             <div class="sensor-gauge">
-              <div class="gauge-fill" id="flexGauge"></div>
+              <div class="gauge-fill" id="stressGauge"></div>
             </div>
           </div>
 
@@ -135,6 +142,22 @@
             </div>
           </div>
 
+          <!-- Tilt Sensor Card -->
+          <div class="sensor-card" data-sensor="tilt">
+            <div class="sensor-header">
+              <div class="sensor-title">
+                <div class="sensor-icon">📐</div>
+                Tilt Angle
+              </div>
+              <div class="sensor-status" id="tiltStatus"></div>
+            </div>
+            <div class="sensor-value" id="tiltVal">--</div>
+            <div class="sensor-unit">°</div>
+            <div class="sensor-gauge">
+              <div class="gauge-fill" id="tiltGauge"></div>
+            </div>
+          </div>
+
         </div>
 
         <!-- Charts Section -->
@@ -159,6 +182,10 @@
             <svg viewBox="0 0 400 150" width="100%" height="100%">
               <!-- Bridge support left -->
               <rect x="20" y="80" width="10" height="60" fill="#00D9FF" opacity="0.6"/>
+              <!-- Gate arm (left) -->
+              <g id="gateGroup">
+                <rect id="gateArm" x="30" y="60" width="80" height="6" fill="#555" transform-origin="30 63"/>
+              </g>
               <!-- Bridge support right -->
               <rect x="370" y="80" width="10" height="60" fill="#00D9FF" opacity="0.6"/>
               <!-- Bridge deck -->

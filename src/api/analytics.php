@@ -1,35 +1,36 @@
 <?php
-$pdo = require __DIR__ . '/../src/db.php';
+$pdo = require __DIR__ . '/../db.php';
 
-// Get time filter from query
 $filter = $_GET['filter'] ?? '24h';
 $interval = match($filter) {
-  '1h' => 3600,
-  '7d' => 604800,
-  default => 86400
+    '1h' => 3600,
+    '7d' => 604800,
+    default => 86400,
 };
 
-$since = time() - $interval;
-$stmt = $pdo->prepare('SELECT * FROM readings WHERE ts > ? ORDER BY ts DESC LIMIT 100');
+$since = date('Y-m-d H:i:s', time() - $interval);
+$stmt = $pdo->prepare('SELECT * FROM readings WHERE created_at >= ? ORDER BY created_at DESC LIMIT 200');
 $stmt->execute([$since]);
 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Calculate statistics
-$temps = array_map(fn($r) => json_decode($r['data'], true)['bridge_temp'] ?? 0, $data);
-$vibes = array_map(fn($r) => json_decode($r['data'], true)['vibration'] ?? 0, $data);
-$loads = array_map(fn($r) => json_decode($r['data'], true)['load'] ?? 0, $data);
+$weights = array_map(fn($r) => floatval($r['weight']), $data);
+$stresses = array_map(fn($r) => floatval($r['stress']), $data);
+$vibrations = array_map(fn($r) => floatval($r['vibration']), $data);
+$tilts = array_map(fn($r) => floatval($r['tilt']), $data);
 
 $stats = [
-  'temp_avg' => count($temps) > 0 ? array_sum($temps) / count($temps) : 0,
-  'temp_max' => count($temps) > 0 ? max($temps) : 0,
-  'vibe_avg' => count($vibes) > 0 ? array_sum($vibes) / count($vibes) : 0,
-  'vibe_max' => count($vibes) > 0 ? max($vibes) : 0,
-  'load_avg' => count($loads) > 0 ? array_sum($loads) / count($loads) : 0,
-  'load_max' => count($loads) > 0 ? max($loads) : 0,
+    'weight_avg' => count($weights) ? array_sum($weights) / count($weights) : 0,
+    'weight_max' => count($weights) ? max($weights) : 0,
+    'stress_avg' => count($stresses) ? array_sum($stresses) / count($stresses) : 0,
+    'stress_max' => count($stresses) ? max($stresses) : 0,
+    'vibration_avg' => count($vibrations) ? array_sum($vibrations) / count($vibrations) : 0,
+    'vibration_max' => count($vibrations) ? max($vibrations) : 0,
+    'tilt_avg' => count($tilts) ? array_sum($tilts) / count($tilts) : 0,
+    'tilt_max' => count($tilts) ? max($tilts) : 0,
 ];
 
 header('Content-Type: application/json');
 echo json_encode([
-  'stats' => $stats,
-  'data' => $data
+    'stats' => $stats,
+    'data' => $data,
 ]);

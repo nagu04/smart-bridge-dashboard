@@ -18,10 +18,11 @@ while (true) {
         echo "event: reading\n";
         echo 'data: ' . json_encode($row) . "\n\n";
         if ($row['critical']) {
-            send_sms('Critical alert: ' . $row['data']);
-            log_message('critical', 'Critical reading: ' . $row['data']);
+            $message = sprintf('Critical alert: weight=%s, stress=%s, vibration=%s, tilt=%s', $row['weight'], $row['stress'], $row['vibration'], $row['tilt']);
+            send_sms($message);
+            log_message('critical', $message);
         } else {
-            log_message('info', 'Reading: ' . $row['data']);
+            log_message('info', 'Reading received: ' . json_encode($row));
         }
         @ob_flush();
         @flush();

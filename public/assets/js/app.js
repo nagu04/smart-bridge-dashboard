@@ -1,79 +1,63 @@
 const basePath = window.location.pathname.replace(/\/(index\.php)?$/, '');
-const apiBase = basePath + '/src/api';
+const apiBase = (window.location.origin + basePath).replace(/\/$/, '') + '/src/api';
 
 // STATE & CONFIG
 let currentPage = 'dashboard';
 let currentFilter = '24h';
-let isConnected = false;
-let lastId = 0;
 let settings = {};
 
-const defaultThresholds = {
-  flex_threshold_warn: 30,
-  flex_threshold_crit: 40,
-  vibe_threshold_warn: 10,
-  vibe_threshold_crit: 12,
-  load_threshold_warn: 800,
-  load_threshold_crit: 950,
+const defaultSettings = {
+  stress_threshold_warn: 50,
+  stress_threshold_crit: 75,
+  vibration_threshold_warn: 10,
+  vibration_threshold_crit: 15,
+  tilt_threshold_warn: 8,
+  tilt_threshold_crit: 12,
+  weight_threshold_warn: 800,
+  weight_threshold_crit: 950,
   sound_enabled: true,
-  auto_refresh: 2,
+  auto_refresh: 1,
   dark_mode: true,
   alerts_enabled: true,
 };
 
 // DOM ELEMENTS
-const flexValEl = document.getElementById('flexVal');
+const stressValEl = document.getElementById('stressVal');
 const vibeValEl = document.getElementById('vibeVal');
 const loadValEl = document.getElementById('loadVal');
-const flexGaugeEl = document.getElementById('flexGauge');
+const tiltValEl = document.getElementById('tiltVal');
+const stressGaugeEl = document.getElementById('stressGauge');
 const vibeGaugeEl = document.getElementById('vibeGauge');
 const loadGaugeEl = document.getElementById('loadGauge');
-const flexStatusEl = document.getElementById('flexStatus');
+const tiltGaugeEl = document.getElementById('tiltGauge');
+const stressStatusEl = document.getElementById('stressStatus');
 const vibeStatusEl = document.getElementById('vibeStatus');
 const loadStatusEl = document.getElementById('loadStatus');
+const tiltStatusEl = document.getElementById('tiltStatus');
 const statusCircleEl = document.getElementById('statusCircle');
 const statusTitleEl = document.getElementById('statusTitle');
 const statusDescEl = document.getElementById('statusDesc');
 const connStatusEl = document.getElementById('connStatus');
+const esp32SystemStatusEl = document.getElementById('esp32SystemStatus');
+const gateStatusEl = document.getElementById('gateStatus');
 const alertBannerEl = document.getElementById('alertBanner');
 const alertTextEl = document.getElementById('alertText');
+const lastSeenEl = document.getElementById('lastSeen');
 const loadDot = document.getElementById('loadDot');
 const seedBtn = document.getElementById('seedBtn');
 const timeDisplayEl = document.getElementById('timeDisplay');
 const pageTitle = document.getElementById('pageTitle');
 
 // CHARTS
-let tempChart, vibeChart, tempAnalysisChart, vibeAnalysisChart;
+let stressChart, vibeChart, stressAnalysisChart, vibeAnalysisChart;
 
 function initCharts() {
-  const tempCtx = document.getElementById('tempChart');
-  if (tempCtx) {
-    tempChart = new Chart(tempCtx.getContext('2d'), {
+  const stressCtx = document.getElementById('tempChart');
+  if (stressCtx) {
+    stressChart = new Chart(stressCtx.getContext('2d'), {
       type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Temperature (°C)',
-          data: [],
-          borderColor: '#C77DFF',
-          backgroundColor: 'rgba(199, 125, 255, 0.05)',
-          borderWidth: 2,
-          tension: 0.4,
-          fill: true,
-          pointRadius: 0,
-          pointHoverRadius: 6,
-          pointBackgroundColor: '#00D9FF',
-        }]
-      },
-      options: {
-        responsive: true,
-        animation: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          y: { display: false, beginAtZero: true },
-          x: { display: false }
-        }
-      }
+      data: { labels: [], datasets: [{ label: 'Structural Stress (%)', data: [], borderColor: '#C77DFF', backgroundColor: 'rgba(199,125,255,0.08)', tension: 0.3, fill: true }] },
+      options: { responsive: true, animation: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true }, x: { display: false } } }
     });
   }
 
@@ -81,59 +65,19 @@ function initCharts() {
   if (vibeCtx) {
     vibeChart = new Chart(vibeCtx.getContext('2d'), {
       type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Vibration (Hz)',
-          data: [],
-          borderColor: '#00D9FF',
-          backgroundColor: 'rgba(0, 217, 255, 0.05)',
-          borderWidth: 2,
-          tension: 0.4,
-          fill: true,
-          pointRadius: 0,
-          pointHoverRadius: 6,
-          pointBackgroundColor: '#C77DFF',
-        }]
-      },
-      options: {
-        responsive: true,
-        animation: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          y: { display: false, beginAtZero: true },
-          x: { display: false }
-        }
-      }
+      data: { labels: [], datasets: [{ label: 'Vibration', data: [], borderColor: '#00D9FF', backgroundColor: 'rgba(0,217,255,0.06)', tension: 0.3, fill: true }] },
+      options: { responsive: true, animation: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true }, x: { display: false } } }
     });
   }
 
-  const tempAnalysisCtx = document.getElementById('tempAnalysisChart');
-  if (tempAnalysisCtx) {
-    tempAnalysisChart = new Chart(tempAnalysisCtx.getContext('2d'), {
-      type: 'line',
-      data: { labels: [], datasets: [] },
-      options: {
-        responsive: true,
-        animation: true,
-        plugins: { legend: { display: true } },
-        scales: { y: { beginAtZero: true } }
-      }
-    });
+  const stressAnalysisCtx = document.getElementById('tempAnalysisChart');
+  if (stressAnalysisCtx) {
+    stressAnalysisChart = new Chart(stressAnalysisCtx.getContext('2d'), { type: 'line', data: { labels: [], datasets: [] }, options: { responsive: true } });
   }
 
   const vibeAnalysisCtx = document.getElementById('vibeAnalysisChart');
   if (vibeAnalysisCtx) {
-    vibeAnalysisChart = new Chart(vibeAnalysisCtx.getContext('2d'), {
-      type: 'line',
-      data: { labels: [], datasets: [] },
-      options: {
-        responsive: true,
-        animation: true,
-        plugins: { legend: { display: true } },
-        scales: { y: { beginAtZero: true } }
-      }
-    });
+    vibeAnalysisChart = new Chart(vibeAnalysisCtx.getContext('2d'), { type: 'line', data: { labels: [], datasets: [] }, options: { responsive: true } });
   }
 }
 
@@ -149,21 +93,12 @@ function updateTime() {
   timeDisplayEl.textContent = formatted;
 }
 
-function getStatus(flex, vibe, load) {
+function getStatus(stress, vibration, weight, tilt) {
   const s = settings;
-  const flexCrit = flex > s.flex_threshold_crit;
-  const vibeCrit = vibe > s.vibe_threshold_crit;
-  const loadCrit = load > s.load_threshold_crit;
-  
-  if (flexCrit || vibeCrit || loadCrit) return 'critical';
-  
-  const flexWarn = flex > s.flex_threshold_warn;
-  const vibeWarn = vibe > s.vibe_threshold_warn;
-  const loadWarn = load > s.load_threshold_warn;
-  
-  if (flexWarn || vibeWarn || loadWarn) return 'warning';
-  
-  return 'safe';
+  const crit = stress >= s.stress_threshold_crit || vibration >= s.vibration_threshold_crit || Math.abs(tilt) >= s.tilt_threshold_crit || weight >= s.weight_threshold_crit;
+  if (crit) return 'critical';
+  const warn = stress >= s.stress_threshold_warn || vibration >= s.vibration_threshold_warn || Math.abs(tilt) >= s.tilt_threshold_warn || weight >= s.weight_threshold_warn;
+  return warn ? 'warning' : 'safe';
 }
 
 function updateStatusIndicator(status) {
@@ -192,15 +127,16 @@ function updateStatusIndicator(status) {
 }
 
 function updateSensorStatus(value, maxWarn, maxCrit, statusEl) {
-  if (value > maxCrit) {
+  if (!statusEl) return;
+  if (value >= maxCrit) {
     statusEl.style.background = '#FF5252';
-    statusEl.style.boxShadow = '0 0 10px rgba(255, 82, 82, 0.8)';
-  } else if (value > maxWarn) {
+    statusEl.style.boxShadow = '0 0 12px rgba(255,82,82,0.9)';
+  } else if (value >= maxWarn) {
     statusEl.style.background = '#FFC400';
-    statusEl.style.boxShadow = '0 0 10px rgba(255, 196, 0, 0.8)';
+    statusEl.style.boxShadow = '0 0 10px rgba(255,196,0,0.8)';
   } else {
     statusEl.style.background = '#00E676';
-    statusEl.style.boxShadow = '0 0 10px rgba(0, 230, 118, 0.6)';
+    statusEl.style.boxShadow = '0 0 8px rgba(0,230,118,0.6)';
   }
 }
 
@@ -225,64 +161,80 @@ function playAlertSound(isCritical) {
 }
 
 function updateUI(reading) {
-  const d = JSON.parse(reading.data);
-  
-  const flex = parseFloat(d.bridge_temp) || 0;
-  const vibe = parseFloat(d.vibration) || 0;
-  const load = parseFloat(d.load) || 0;
-  
-  flexValEl.textContent = flex.toFixed(1);
-  vibeValEl.textContent = vibe.toFixed(1);
-  loadValEl.textContent = load.toFixed(1);
-  
-  const flexPct = Math.min(100, (flex / settings.flex_threshold_crit * 0.8) * 100);
-  const vibePct = Math.min(100, (vibe / settings.vibe_threshold_crit * 0.8) * 100);
-  const loadPct = Math.min(100, (load / settings.load_threshold_crit * 0.8) * 100);
-  
-  flexGaugeEl.style.width = flexPct + '%';
+  if (!reading) return;
+  const weight = parseFloat(reading.weight) || 0;
+  const stress = parseFloat(reading.stress) || 0;
+  const vibration = parseFloat(reading.vibration) || 0;
+  const tilt = parseFloat(reading.tilt) || 0;
+
+  // Update metric cards
+  loadValEl.textContent = weight.toFixed(1);
+  stressValEl.textContent = stress.toFixed(1);
+  vibeValEl.textContent = vibration.toFixed(1);
+  tiltValEl.textContent = tilt.toFixed(1);
+  gateStatusEl.textContent = reading.gate_status || 'UNKNOWN';
+  lastSeenEl.textContent = reading.created_at || '';
+
+  // Update gauges
+  const stressPct = Math.min(100, (stress / (settings.stress_threshold_crit || defaultSettings.stress_threshold_crit)) * 100);
+  const vibePct = Math.min(100, (vibration / (settings.vibration_threshold_crit || defaultSettings.vibration_threshold_crit)) * 100);
+  const loadPct = Math.min(100, (weight / (settings.weight_threshold_crit || defaultSettings.weight_threshold_crit)) * 100);
+  const tiltPct = Math.min(100, (Math.abs(tilt) / (settings.tilt_threshold_crit || defaultSettings.tilt_threshold_crit)) * 100);
+
+  stressGaugeEl.style.width = stressPct + '%';
   vibeGaugeEl.style.width = vibePct + '%';
   loadGaugeEl.style.width = loadPct + '%';
-  
-  updateSensorStatus(flex, settings.flex_threshold_warn, settings.flex_threshold_crit, flexStatusEl);
-  updateSensorStatus(vibe, settings.vibe_threshold_warn, settings.vibe_threshold_crit, vibeStatusEl);
-  updateSensorStatus(load, settings.load_threshold_warn, settings.load_threshold_crit, loadStatusEl);
-  
-  const status = getStatus(flex, vibe, load);
-  updateStatusIndicator(status);
-  
-  if (tempChart) {
-    const ts = new Date(reading.ts * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    tempChart.data.labels.push(ts);
-    tempChart.data.datasets[0].data.push(flex);
-    vibeChart.data.labels.push(ts);
-    vibeChart.data.datasets[0].data.push(vibe);
-    
-    if (tempChart.data.labels.length > 20) {
-      tempChart.data.labels.shift();
-      tempChart.data.datasets[0].data.shift();
-      vibeChart.data.labels.shift();
-      vibeChart.data.datasets[0].data.shift();
-    }
-    
-    tempChart.update();
-    vibeChart.update();
+  tiltGaugeEl.style.width = tiltPct + '%';
+
+  updateSensorStatus(stress, settings.stress_threshold_warn, settings.stress_threshold_crit, stressStatusEl);
+  updateSensorStatus(vibration, settings.vibration_threshold_warn, settings.vibration_threshold_crit, vibeStatusEl);
+  updateSensorStatus(weight, settings.weight_threshold_warn, settings.weight_threshold_crit, loadStatusEl);
+  updateSensorStatus(Math.abs(tilt), settings.tilt_threshold_warn, settings.tilt_threshold_crit, tiltStatusEl);
+
+  // Bridge health
+  const state = getStatus(stress, vibration, weight, tilt);
+  updateStatusIndicator(state);
+  updateConnectionStatus(reading.system_status || 'OFFLINE');
+
+  // Charts
+  if (stressChart) {
+    const label = new Date(reading.created_at).toLocaleTimeString();
+    stressChart.data.labels.push(label);
+    stressChart.data.datasets[0].data.push(stress);
+    if (stressChart.data.labels.length > 40) { stressChart.data.labels.shift(); stressChart.data.datasets[0].data.shift(); }
+    stressChart.update('none');
   }
-  
-  const loadPctNorm = Math.min(1, load / settings.load_threshold_crit);
-  const cx = 50 + 300 * loadPctNorm;
+  if (vibeChart) {
+    const label = new Date(reading.created_at).toLocaleTimeString();
+    vibeChart.data.labels.push(label);
+    vibeChart.data.datasets[0].data.push(vibration);
+    if (vibeChart.data.labels.length > 40) { vibeChart.data.labels.shift(); vibeChart.data.datasets[0].data.shift(); }
+    vibeChart.update('none');
+  }
+
+  // Bridge visualization
+  const cx = 50 + 300 * Math.min(1, weight / (settings.weight_threshold_crit || defaultSettings.weight_threshold_crit));
   loadDot.setAttribute('cx', cx);
-  
   const bridgeDeck = document.getElementById('bridgeDeck');
-  if (status === 'critical') {
-    bridgeDeck.style.stroke = '#FF5252';
-    bridgeDeck.style.filter = 'drop-shadow(0 0 8px rgba(255,82,82,0.6))';
-  } else if (status === 'warning') {
-    bridgeDeck.style.stroke = '#FFC400';
-    bridgeDeck.style.filter = 'drop-shadow(0 0 6px rgba(255,196,0,0.4))';
+  if (state === 'critical') { bridgeDeck.style.stroke = '#FF5252'; bridgeDeck.style.filter = 'drop-shadow(0 0 8px rgba(255,82,82,0.6))'; }
+  else if (state === 'warning') { bridgeDeck.style.stroke = '#FFC400'; bridgeDeck.style.filter = 'drop-shadow(0 0 6px rgba(255,196,0,0.4))'; }
+  else { bridgeDeck.style.stroke = '#00D9FF'; bridgeDeck.style.filter = 'drop-shadow(0 0 6px rgba(0,217,255,0.3))'; }
+
+  // animate gate if present
+  animateGate(reading.gate_status || 'CLOSED');
+}
+
+function animateGate(status) {
+  const gate = document.getElementById('gateArm');
+  if (!gate) return;
+  if (status.toUpperCase() === 'OPEN') {
+    gate.style.transition = 'transform 600ms ease';
+    gate.style.transform = 'rotate(-45deg)';
   } else {
-    bridgeDeck.style.stroke = '#00D9FF';
-    bridgeDeck.style.filter = 'drop-shadow(0 0 6px rgba(0,217,255,0.3))';
+    gate.style.transition = 'transform 600ms ease';
+    gate.style.transform = 'rotate(0deg)';
   }
+  gateStatusEl.textContent = status;
 }
 
 // PAGE NAVIGATION
@@ -323,50 +275,46 @@ function loadAnalytics() {
 
 function displayAnalyticsStats(stats) {
   const grid = document.getElementById('statsGrid');
+  if (!grid) return;
   grid.innerHTML = `
     <div class="stat-card">
-      <div class="stat-label">Avg Temperature</div>
-      <div class="stat-value">${stats.temp_avg?.toFixed(1) || '--'}°C</div>
+      <div class="stat-label">Avg Stress</div>
+      <div class="stat-value">${stats.stress_avg?.toFixed(1) || '--'}%</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Max Temperature</div>
-      <div class="stat-value">${stats.temp_max?.toFixed(1) || '--'}°C</div>
+      <div class="stat-label">Max Stress</div>
+      <div class="stat-value">${stats.stress_max?.toFixed(1) || '--'}%</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Avg Vibration</div>
-      <div class="stat-value">${stats.vibe_avg?.toFixed(1) || '--'} Hz</div>
+      <div class="stat-value">${stats.vibration_avg?.toFixed(1) || '--'} Hz</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Max Vibration</div>
-      <div class="stat-value">${stats.vibe_max?.toFixed(1) || '--'} Hz</div>
+      <div class="stat-value">${stats.vibration_max?.toFixed(1) || '--'} Hz</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Avg Load</div>
-      <div class="stat-value">${stats.load_avg?.toFixed(0) || '--'} kg</div>
+      <div class="stat-label">Avg Weight</div>
+      <div class="stat-value">${stats.weight_avg?.toFixed(1) || '--'} kg</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Max Load</div>
-      <div class="stat-value">${stats.load_max?.toFixed(0) || '--'} kg</div>
+      <div class="stat-label">Max Weight</div>
+      <div class="stat-value">${stats.weight_max?.toFixed(1) || '--'} kg</div>
     </div>
   `;
 }
 
 function updateAnalyticsCharts(data) {
-  if (!tempAnalysisChart) initCharts();
-  
-  const temps = data.map(r => parseFloat(JSON.parse(r.data).bridge_temp) || 0).slice().reverse();
-  const times = data.map(r => new Date(r.ts * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })).slice().reverse();
-  
-  tempAnalysisChart.data.labels = times;
-  tempAnalysisChart.data.datasets = [{
-    label: 'Temperature (°C)',
-    data: temps,
-    borderColor: '#C77DFF',
-    backgroundColor: 'rgba(199, 125, 255, 0.1)',
-    tension: 0.4,
-    fill: true
-  }];
-  tempAnalysisChart.update();
+  if (!stressAnalysisChart || !vibeAnalysisChart) initCharts();
+  const rows = (data || []).slice().reverse();
+  const times = rows.map(r => new Date(r.created_at).toLocaleTimeString());
+  stressAnalysisChart.data.labels = times;
+  stressAnalysisChart.data.datasets = [{ label: 'Stress (%)', data: rows.map(r => parseFloat(r.stress) || 0), borderColor: '#C77DFF', backgroundColor: 'rgba(199,125,255,0.1)', tension: 0.3, fill: true }];
+  stressAnalysisChart.update();
+
+  vibeAnalysisChart.data.labels = times;
+  vibeAnalysisChart.data.datasets = [{ label: 'Vibration', data: rows.map(r => parseFloat(r.vibration) || 0), borderColor: '#00D9FF', backgroundColor: 'rgba(0,217,255,0.08)', tension: 0.3, fill: true }];
+  vibeAnalysisChart.update();
 }
 
 // REPORTS PAGE
@@ -400,43 +348,45 @@ async function loadSettings() {
     const response = await fetch(`${apiBase}/settings.php`);
     settings = await response.json();
   } catch (err) {
-    settings = defaultThresholds;
+    settings = defaultSettings;
   }
-  
-  document.getElementById('flexWarnSlider').value = settings.flex_threshold_warn;
-  document.getElementById('flexWarnValue').textContent = settings.flex_threshold_warn;
-  document.getElementById('flexCritSlider').value = settings.flex_threshold_crit;
-  document.getElementById('flexCritValue').textContent = settings.flex_threshold_crit;
-  document.getElementById('vibeWarnSlider').value = settings.vibe_threshold_warn;
-  document.getElementById('vibeWarnValue').textContent = settings.vibe_threshold_warn;
-  document.getElementById('vibeCritSlider').value = settings.vibe_threshold_crit;
-  document.getElementById('vibeCritValue').textContent = settings.vibe_threshold_crit;
-  document.getElementById('loadWarnSlider').value = settings.load_threshold_warn;
-  document.getElementById('loadWarnValue').textContent = settings.load_threshold_warn;
-  document.getElementById('loadCritSlider').value = settings.load_threshold_crit;
-  document.getElementById('loadCritValue').textContent = settings.load_threshold_crit;
-  
-  document.getElementById('refreshIntervalInput').value = settings.auto_refresh;
-  document.getElementById('darkModeToggle').checked = settings.dark_mode;
-  document.getElementById('alertsEnabledToggle').checked = settings.alerts_enabled;
-  document.getElementById('soundToggle').checked = settings.sound_enabled;
+  // map to UI sliders (HTML uses original slider ids)
+  document.getElementById('flexWarnSlider').value = settings.stress_threshold_warn ?? defaultSettings.stress_threshold_warn;
+  document.getElementById('flexWarnValue').textContent = settings.stress_threshold_warn ?? defaultSettings.stress_threshold_warn;
+  document.getElementById('flexCritSlider').value = settings.stress_threshold_crit ?? defaultSettings.stress_threshold_crit;
+  document.getElementById('flexCritValue').textContent = settings.stress_threshold_crit ?? defaultSettings.stress_threshold_crit;
+  document.getElementById('vibeWarnSlider').value = settings.vibration_threshold_warn ?? defaultSettings.vibration_threshold_warn;
+  document.getElementById('vibeWarnValue').textContent = settings.vibration_threshold_warn ?? defaultSettings.vibration_threshold_warn;
+  document.getElementById('vibeCritSlider').value = settings.vibration_threshold_crit ?? defaultSettings.vibration_threshold_crit;
+  document.getElementById('vibeCritValue').textContent = settings.vibration_threshold_crit ?? defaultSettings.vibration_threshold_crit;
+  document.getElementById('loadWarnSlider').value = settings.weight_threshold_warn ?? defaultSettings.weight_threshold_warn;
+  document.getElementById('loadWarnValue').textContent = settings.weight_threshold_warn ?? defaultSettings.weight_threshold_warn;
+  document.getElementById('loadCritSlider').value = settings.weight_threshold_crit ?? defaultSettings.weight_threshold_crit;
+  document.getElementById('loadCritValue').textContent = settings.weight_threshold_crit ?? defaultSettings.weight_threshold_crit;
+
+  document.getElementById('refreshIntervalInput').value = settings.auto_refresh ?? defaultSettings.auto_refresh;
+  document.getElementById('darkModeToggle').checked = settings.dark_mode ?? defaultSettings.dark_mode;
+  document.getElementById('alertsEnabledToggle').checked = settings.alerts_enabled ?? defaultSettings.alerts_enabled;
+  document.getElementById('soundToggle').checked = settings.sound_enabled ?? defaultSettings.sound_enabled;
 }
 
 // MODALS & INTERACTIONS
 function showSensorModal(sensorName) {
   const sensorNames = {
-    flex: 'Flex Sensor',
-    vibe: 'Vibration Sensor',
-    load: 'Load Weight Sensor'
+    stress: 'Structural Stress',
+    vibe: 'Vibration Intensity',
+    load: 'Vehicle Weight',
+    tilt: 'Tilt Angle'
   };
-  
+
   const values = {
-    flex: { current: flexValEl.textContent, unit: 'mm strain', status: 'Normal' },
-    vibe: { current: vibeValEl.textContent, unit: 'Hz', status: 'Normal' },
-    load: { current: loadValEl.textContent, unit: 'kg', status: 'Normal' }
+    stress: { current: stressValEl?.textContent || '--', unit: '%', status: 'Normal' },
+    vibe: { current: vibeValEl?.textContent || '--', unit: 'Hz', status: 'Normal' },
+    load: { current: loadValEl?.textContent || '--', unit: 'kg', status: 'Normal' },
+    tilt: { current: tiltValEl?.textContent || '--', unit: '°', status: 'Normal' }
   };
-  
-  const v = values[sensorName];
+
+  const v = values[sensorName] || { current: '--', unit: '' };
   const content = document.createElement('div');
   content.innerHTML = `
     <div class="stat-card" style="margin-bottom: 20px;">
@@ -449,14 +399,10 @@ function showSensorModal(sensorName) {
     </div>
     <canvas id="sensorModalChart" style="max-height: 200px;"></canvas>
   `;
-  
-  const modal = new Modal(sensorNames[sensorName] + ' Details', content, {
-    buttons: [
-      { text: 'Close', type: 'secondary', action: () => modal.close() }
-    ]
-  });
-  
-  modal.show();
+
+  if (window.Swal) {
+    Swal.fire({ title: sensorNames[sensorName] || 'Sensor', html: content, showConfirmButton: true });
+  }
 }
 
 function showAlertHistory() {
@@ -465,62 +411,50 @@ function showAlertHistory() {
     .then(data => {
       const content = document.createElement('div');
       let html = '<div style="max-height: 400px; overflow-y: auto;">';
-      
-      if (data.alerts.length === 0) {
+      if (!data.alerts || data.alerts.length === 0) {
         html += '<div class="empty-state"><div class="empty-state-text">No critical alerts</div></div>';
       } else {
         data.alerts.forEach(alert => {
           html += `
             <div class="alert-item critical">
-              <div>
-                <strong>${alert.data.bridge_temp}°C</strong> | 
-                <strong>${alert.data.vibration} Hz</strong> | 
-                <strong>${alert.data.load} kg</strong>
-              </div>
-              <div class="alert-item-time">${alert.timestamp}</div>
+              <div><strong>${alert.type}</strong> · ${alert.message}</div>
+              <div class="alert-item-time">${alert.created_at}</div>
             </div>
           `;
         });
       }
-      
       html += '</div>';
       content.innerHTML = html;
-      
-      const modal = new Modal('Alert History', content, {
-        buttons: [{ text: 'Close', type: 'secondary', action: () => modal.close() }]
-      });
-      modal.show();
-    });
+      if (window.Swal) {
+        Swal.fire({ title: 'Alert History', html: content, width: 700, showConfirmButton: false });
+      }
+    })
+    .catch(() => {});
 }
 
 // CONNECTION STATUS
-function updateConnStatus(connected) {
-  isConnected = connected;
-  if (connected) {
-    connStatusEl.className = 'status-badge';
-    connStatusEl.innerHTML = '<span class="status-dot"></span>ESP-32 Connected';
-  } else {
-    connStatusEl.className = 'status-badge warning';
-    connStatusEl.innerHTML = '<span class="status-dot"></span>Reconnecting...';
+function updateConnectionStatus(status) {
+  const cls = status === 'ONLINE' ? 'status-badge' : status === 'RECONNECTING' ? 'status-badge warning' : 'status-badge critical';
+  connStatusEl.className = cls;
+  connStatusEl.innerHTML = `<span class="status-dot"></span>ESP-32 ${status}`;
+  if (esp32SystemStatusEl) esp32SystemStatusEl.textContent = status;
+}
+
+async function fetchLatestReading() {
+  try {
+    const res = await fetch(`${apiBase}/latest.php`);
+    const json = await res.json();
+    if (!json) return;
+    if (json.esp32_status) updateConnectionStatus(json.esp32_status);
+    if (json.reading) updateUI(json.reading);
+  } catch (e) {
+    updateConnectionStatus('OFFLINE');
   }
 }
 
-// SSE CONNECTION
-function connectSSE() {
-  const sse = new EventSource(`${apiBase}/stream.php?last_id=${lastId}`);
-  
-  sse.addEventListener('reading', (e) => {
-    const row = JSON.parse(e.data);
-    lastId = row.id;
-    updateUI(row);
-    updateConnStatus(true);
-  });
-  
-  sse.addEventListener('error', () => {
-    updateConnStatus(false);
-    sse.close();
-    setTimeout(connectSSE, 3000);
-  });
+function startAutoRefresh() {
+  const interval = Math.max(1, settings.auto_refresh || defaultSettings.auto_refresh) * 1000;
+  setInterval(fetchLatestReading, interval);
 }
 
 // EVENT LISTENERS
@@ -589,13 +523,13 @@ function setupEventListeners() {
   document.getElementById('saveSettingsBtn')?.addEventListener('click', async () => {
     const newSettings = {
       ...settings,
-      flex_threshold_warn: parseInt(document.getElementById('flexWarnSlider').value),
-      flex_threshold_crit: parseInt(document.getElementById('flexCritSlider').value),
-      vibe_threshold_warn: parseInt(document.getElementById('vibeWarnSlider').value),
-      vibe_threshold_crit: parseInt(document.getElementById('vibeCritSlider').value),
-      load_threshold_warn: parseInt(document.getElementById('loadWarnSlider').value),
-      load_threshold_crit: parseInt(document.getElementById('loadCritSlider').value),
-      auto_refresh: parseInt(document.getElementById('refreshIntervalInput').value),
+      stress_threshold_warn: parseInt(document.getElementById('flexWarnSlider').value, 10),
+      stress_threshold_crit: parseInt(document.getElementById('flexCritSlider').value, 10),
+      vibration_threshold_warn: parseInt(document.getElementById('vibeWarnSlider').value, 10),
+      vibration_threshold_crit: parseInt(document.getElementById('vibeCritSlider').value, 10),
+      weight_threshold_warn: parseInt(document.getElementById('loadWarnSlider').value, 10),
+      weight_threshold_crit: parseInt(document.getElementById('loadCritSlider').value, 10),
+      auto_refresh: parseInt(document.getElementById('refreshIntervalInput').value, 10),
       dark_mode: document.getElementById('darkModeToggle').checked,
       alerts_enabled: document.getElementById('alertsEnabledToggle').checked,
       sound_enabled: document.getElementById('soundToggle').checked,
@@ -608,9 +542,10 @@ function setupEventListeners() {
         body: JSON.stringify(newSettings)
       });
       settings = newSettings;
-      toast.success('Settings saved successfully');
+      toast?.success && toast.success('Settings saved successfully');
+      startAutoRefresh();
     } catch (err) {
-      toast.error('Failed to save settings');
+      toast?.error && toast.error('Failed to save settings');
     }
   });
   
@@ -633,9 +568,11 @@ async function init() {
   
   initCharts();
   setupEventListeners();
-  updateConnStatus(false);
-  
-  setTimeout(() => connectSSE(), 500);
+  updateConnectionStatus('OFFLINE');
+
+  // initial fetch then start periodic updates
+  await fetchLatestReading();
+  startAutoRefresh();
 }
 
 if (document.readyState === 'loading') {

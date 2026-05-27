@@ -1,20 +1,25 @@
 <?php
-$pdo = require __DIR__ . '/../src/db.php';
+$pdo = require __DIR__ . '/../db.php';
 header('Content-Type: application/json');
 
-// Get alerts (critical readings)
-$stmt = $pdo->query('SELECT * FROM readings WHERE critical = 1 ORDER BY id DESC LIMIT 50');
+$stmt = $pdo->query('SELECT * FROM alerts ORDER BY created_at DESC LIMIT 50');
 $alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $result = [];
 foreach ($alerts as $alert) {
-  $data = json_decode($alert['data'], true);
-  $result[] = [
-    'id' => $alert['id'],
-    'ts' => $alert['ts'],
-    'data' => $data,
-    'timestamp' => date('Y-m-d H:i:s', $alert['ts'])
-  ];
+    $result[] = [
+        'id' => $alert['id'],
+        'reading_id' => $alert['reading_id'],
+        'type' => $alert['alert_type'],
+        'message' => $alert['message'],
+        'weight' => floatval($alert['weight']),
+        'stress' => floatval($alert['stress']),
+        'tilt' => floatval($alert['tilt']),
+        'vibration' => floatval($alert['vibration']),
+        'gate_status' => $alert['gate_status'],
+        'system_status' => $alert['system_status'],
+        'created_at' => $alert['created_at'],
+    ];
 }
 
 echo json_encode(['alerts' => $result]);
