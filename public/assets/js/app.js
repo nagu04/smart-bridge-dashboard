@@ -1,5 +1,8 @@
-const basePath = window.location.pathname.replace(/\/(index\.php)?$/, '');
-const apiBase = (window.location.origin + basePath).replace(/\/$/, '') + '/src/api';
+const currentPath = window.location.pathname;
+const rootPath = currentPath.includes('/public')
+  ? currentPath.substring(0, currentPath.indexOf('/public'))
+  : currentPath.replace(/\/(index\.php)?$/, '');
+const apiBase = (window.location.origin + rootPath).replace(/\/$/, '') + '/src/api';
 
 // STATE & CONFIG
 let currentPage = 'dashboard';
