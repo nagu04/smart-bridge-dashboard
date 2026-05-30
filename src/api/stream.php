@@ -73,12 +73,10 @@ if ($method === 'GET') {
     $system_status = "HEALTHY";
     
     if ($stress >= $config['thresholds']['stress_crit'] || 
-        abs($tilt) >= $config['thresholds']['tilt_crit'] || 
         $weight >= $config['thresholds']['weight_crit']) {
         $is_critical = 1;
         $system_status = "CRITICAL";
     } elseif ($stress >= $config['thresholds']['stress_warn'] || 
-              abs($tilt) >= $config['thresholds']['tilt_warn'] || 
               $weight >= $config['thresholds']['weight_warn']) {
         $system_status = "WARNING";
     }
@@ -105,7 +103,7 @@ if ($method === 'GET') {
 
         // Systemic Safety Logic: Trigger logs and text alert hooks if a critical violation happens
         if ($is_critical === 1) {
-            $alertMsg = "CRITICAL VIOLATION: Weight: {$weight}kg, Stress: {$stress}%, Tilt: {$tilt}deg!";
+            $alertMsg = "CRITICAL VIOLATION: Weight: {$weight}kg, Stress: {$stress}%!";
             
             // Log to database via your logger.php script
             log_message('CRITICAL', $alertMsg);

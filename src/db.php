@@ -36,6 +36,15 @@ if ($config['db']['driver'] === 'sqlite') {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );");
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS commands (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        command TEXT NOT NULL,
+        payload TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        result TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        processed_at DATETIME
+    );");
     $pdo->exec("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, level TEXT NOT NULL, message TEXT NOT NULL);");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_readings_created_at ON readings(created_at);");
 } else {

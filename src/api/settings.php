@@ -31,6 +31,8 @@ if (file_exists($settingsFile)) {
         'auto_refresh' => 2,
         'dark_mode' => true,
         'alerts_enabled' => true,
+        'esp32_max_weight_bar_kg' => 35.0,
+        'esp32_max_strain_bridge_kg' => 40.0,
     ];
 }
 

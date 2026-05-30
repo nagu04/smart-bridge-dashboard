@@ -258,7 +258,42 @@ body {
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-2px); }
-  75% { transform: translateX(2px); }
+}
+
+#bridgeViz svg {
+  overflow: visible;
+}
+
+.bridge-body {
+  stroke: #00D9FF;
+  stroke-width: 6;
+  opacity: 0.95;
+  transition: stroke 250ms ease, stroke-width 250ms ease, filter 250ms ease;
+}
+
+.truss-line {
+  stroke: #00D9FF;
+  stroke-width: 3;
+  opacity: 0.95;
+  transition: stroke 200ms ease, stroke-width 200ms ease;
+}
+
+#bridgeViz.bridge-critical .bridge-body,
+#bridgeViz.bridge-critical .truss-line {
+  stroke: #FF5252 !important;
+  stroke-width: 5 !important;
+  filter: drop-shadow(0 0 18px rgba(255,82,82,0.9));
+  animation: bridge-flash 1s infinite alternate;
+}
+
+@keyframes bridge-flash {
+  0% { stroke: #FF5252; }
+  50% { stroke: #FFFFFF; }
+  100% { stroke: #FF5252; }
+}
+
+#bridgeViz.offline svg {
+  opacity: 0.35;
 }
 
 .status-text h3 {

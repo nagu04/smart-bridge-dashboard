@@ -16,7 +16,8 @@ return [
         'from' => '',
         'to' => '',
     ],
-    'api_key' => 'change_me_to_a_secure_key',
+    // Note: keep this in sync with your device firmware `apiKey`
+    'api_key' => 'your_api_key_here',
     'thresholds' => [
         'stress_warn' => 50,
         'stress_crit' => 75,

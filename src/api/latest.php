@@ -2,7 +2,7 @@
 $pdo = require __DIR__ . '/../db.php';
 header('Content-Type: application/json');
 
-$stmt = $pdo->query('SELECT * FROM readings ORDER BY created_at DESC LIMIT 1');
+$stmt = $pdo->query('SELECT * FROM readings ORDER BY id DESC LIMIT 1');
 $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
 $status = 'OFFLINE';
@@ -11,9 +11,9 @@ if ($row) {
     $lastSeen = $row['created_at'];
     $lastTimestamp = strtotime($lastSeen);
     $age = time() - $lastTimestamp;
-    if ($age <= 5) {
+    if ($age <= 3) {
         $status = 'ONLINE';
-    } elseif ($age <= 20) {
+    } elseif ($age <= 10) {
         $status = 'RECONNECTING';
     }
 }

@@ -14,14 +14,14 @@ const defaultSettings = {
   stress_threshold_crit: 75,
   vibration_threshold_warn: 10,
   vibration_threshold_crit: 15,
-  tilt_threshold_warn: 8,
-  tilt_threshold_crit: 12,
   weight_threshold_warn: 800,
   weight_threshold_crit: 950,
   sound_enabled: true,
   auto_refresh: 1,
   dark_mode: true,
   alerts_enabled: true,
+  esp32_max_weight_bar_kg: 35.0,
+  esp32_max_strain_bridge_kg: 40.0,
 };
 
 // DOM ELEMENTS
@@ -42,10 +42,11 @@ const statusTitleEl = document.getElementById('statusTitle');
 const statusDescEl = document.getElementById('statusDesc');
 const connStatusEl = document.getElementById('connStatus');
 const esp32SystemStatusEl = document.getElementById('esp32SystemStatus');
-const gateStatusEl = document.getElementById('gateStatus');
 const alertBannerEl = document.getElementById('alertBanner');
 const alertTextEl = document.getElementById('alertText');
+const lastSeenBadgeEl = document.getElementById('lastSeenBadge');
 const lastSeenEl = document.getElementById('lastSeen');
+const tareBtn = document.getElementById('tareBtn');
 const loadDot = document.getElementById('loadDot');
 const seedBtn = document.getElementById('seedBtn');
 const timeDisplayEl = document.getElementById('timeDisplay');
@@ -97,10 +98,10 @@ function updateTime() {
 }
 
 function getStatus(stress, vibration, weight, tilt) {
-  const s = settings;
-  const crit = stress >= s.stress_threshold_crit || vibration >= s.vibration_threshold_crit || Math.abs(tilt) >= s.tilt_threshold_crit || weight >= s.weight_threshold_crit;
+  const s = { ...defaultSettings, ...settings };
+  const crit = stress >= s.stress_threshold_crit || vibration >= s.vibration_threshold_crit || weight >= s.weight_threshold_crit;
   if (crit) return 'critical';
-  const warn = stress >= s.stress_threshold_warn || vibration >= s.vibration_threshold_warn || Math.abs(tilt) >= s.tilt_threshold_warn || weight >= s.weight_threshold_warn;
+  const warn = stress >= s.stress_threshold_warn || vibration >= s.vibration_threshold_warn || weight >= s.weight_threshold_warn;
   return warn ? 'warning' : 'safe';
 }
 
@@ -175,14 +176,15 @@ function updateUI(reading) {
   stressValEl.textContent = stress.toFixed(1);
   vibeValEl.textContent = vibration.toFixed(1);
   tiltValEl.textContent = tilt.toFixed(1);
-  gateStatusEl.textContent = reading.gate_status || 'UNKNOWN';
-  lastSeenEl.textContent = reading.created_at || '';
+  const lastSeenText = reading.created_at ? `Last update: ${reading.created_at}` : '--';
+  if (lastSeenBadgeEl) lastSeenBadgeEl.textContent = lastSeenText;
+  if (lastSeenEl) lastSeenEl.textContent = reading.created_at || '--';
 
   // Update gauges
   const stressPct = Math.min(100, (stress / (settings.stress_threshold_crit || defaultSettings.stress_threshold_crit)) * 100);
   const vibePct = Math.min(100, (vibration / (settings.vibration_threshold_crit || defaultSettings.vibration_threshold_crit)) * 100);
   const loadPct = Math.min(100, (weight / (settings.weight_threshold_crit || defaultSettings.weight_threshold_crit)) * 100);
-  const tiltPct = Math.min(100, (Math.abs(tilt) / (settings.tilt_threshold_crit || defaultSettings.tilt_threshold_crit)) * 100);
+  const tiltPct = Math.min(100, (Math.abs(tilt) / 18) * 100);
 
   stressGaugeEl.style.width = stressPct + '%';
   vibeGaugeEl.style.width = vibePct + '%';
@@ -192,12 +194,21 @@ function updateUI(reading) {
   updateSensorStatus(stress, settings.stress_threshold_warn, settings.stress_threshold_crit, stressStatusEl);
   updateSensorStatus(vibration, settings.vibration_threshold_warn, settings.vibration_threshold_crit, vibeStatusEl);
   updateSensorStatus(weight, settings.weight_threshold_warn, settings.weight_threshold_crit, loadStatusEl);
-  updateSensorStatus(Math.abs(tilt), settings.tilt_threshold_warn, settings.tilt_threshold_crit, tiltStatusEl);
+  if (tiltStatusEl) {
+    tiltStatusEl.style.background = '#00E676';
+    tiltStatusEl.style.boxShadow = '0 0 8px rgba(0,230,118,0.6)';
+  }
 
   // Bridge health
   const state = getStatus(stress, vibration, weight, tilt);
   updateStatusIndicator(state);
   updateConnectionStatus(reading.system_status || 'OFFLINE');
+
+  const bridgeVizEl = document.getElementById('bridgeViz');
+  if (bridgeVizEl) {
+    bridgeVizEl.classList.toggle('bridge-critical', state === 'critical');
+    bridgeVizEl.classList.remove('offline');
+  }
 
   // Charts
   if (stressChart) {
@@ -217,27 +228,34 @@ function updateUI(reading) {
 
   // Bridge visualization
   const cx = 50 + 300 * Math.min(1, weight / (settings.weight_threshold_crit || defaultSettings.weight_threshold_crit));
-  loadDot.setAttribute('cx', cx);
+  if (loadDot) loadDot.setAttribute('cx', cx);
   const bridgeDeck = document.getElementById('bridgeDeck');
-  if (state === 'critical') { bridgeDeck.style.stroke = '#FF5252'; bridgeDeck.style.filter = 'drop-shadow(0 0 8px rgba(255,82,82,0.6))'; }
-  else if (state === 'warning') { bridgeDeck.style.stroke = '#FFC400'; bridgeDeck.style.filter = 'drop-shadow(0 0 6px rgba(255,196,0,0.4))'; }
-  else { bridgeDeck.style.stroke = '#00D9FF'; bridgeDeck.style.filter = 'drop-shadow(0 0 6px rgba(0,217,255,0.3))'; }
+  if (bridgeDeck) {
+    if (state === 'critical') { bridgeDeck.style.stroke = '#FF5252'; bridgeDeck.style.filter = 'drop-shadow(0 0 8px rgba(255,82,82,0.6))'; }
+    else if (state === 'warning') { bridgeDeck.style.stroke = '#FFC400'; bridgeDeck.style.filter = 'drop-shadow(0 0 6px rgba(255,196,0,0.4))'; }
+    else { bridgeDeck.style.stroke = '#00D9FF'; bridgeDeck.style.filter = 'drop-shadow(0 0 6px rgba(0,217,255,0.3))'; }
+  }
 
   // animate gate if present
-  animateGate(reading.gate_status || 'CLOSED');
 }
 
-function animateGate(status) {
-  const gate = document.getElementById('gateArm');
-  if (!gate) return;
-  if (status.toUpperCase() === 'OPEN') {
-    gate.style.transition = 'transform 600ms ease';
-    gate.style.transform = 'rotate(-45deg)';
-  } else {
-    gate.style.transition = 'transform 600ms ease';
-    gate.style.transform = 'rotate(0deg)';
+function clearOfflineView() {
+  loadValEl.textContent = '--';
+  stressValEl.textContent = '--';
+  vibeValEl.textContent = '--';
+  tiltValEl.textContent = '--';
+  if (lastSeenBadgeEl) lastSeenBadgeEl.textContent = 'Last update: No recent data';
+  if (lastSeenEl) lastSeenEl.textContent = 'No recent data';
+  stressGaugeEl.style.width = '0%';
+  vibeGaugeEl.style.width = '0%';
+  loadGaugeEl.style.width = '0%';
+  tiltGaugeEl.style.width = '0%';
+
+  const bridgeVizEl = document.getElementById('bridgeViz');
+  if (bridgeVizEl) {
+    bridgeVizEl.classList.add('offline');
+    bridgeVizEl.classList.remove('bridge-critical');
   }
-  gateStatusEl.textContent = status;
 }
 
 // PAGE NAVIGATION
@@ -321,28 +339,72 @@ function updateAnalyticsCharts(data) {
 }
 
 // REPORTS PAGE
-function loadReports() {
+async function loadReports() {
   const reportsContent = document.getElementById('reportsContent');
-  reportsContent.innerHTML = `
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-label">Total Readings</div>
-        <div class="stat-value">1,250</div>
+  if (!reportsContent) return;
+  reportsContent.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-title">Loading report history...</div></div>';
+
+  try {
+    const response = await fetch(`${apiBase}/fetch.php?filter=24h`);
+    const json = await response.json();
+    const rows = (json.data || []).slice().reverse();
+    const total = rows.length;
+    const critical = rows.filter(r => parseInt(r.critical, 10) === 1).length;
+    const warnings = rows.filter(r => r.system_status === 'WARNING').length;
+    const latest = rows[0];
+
+    const historyRows = rows.slice(0, 20).map(r => `
+      <tr>
+        <td>${new Date(r.created_at).toLocaleString()}</td>
+        <td>${parseFloat(r.weight).toFixed(1)}</td>
+        <td>${parseFloat(r.stress).toFixed(1)}</td>
+        <td>${parseFloat(r.tilt).toFixed(1)}</td>
+        <td>${parseFloat(r.vibration).toFixed(2)}</td>
+        <td>${r.system_status || 'UNKNOWN'}</td>
+      </tr>
+    `).join('');
+
+    reportsContent.innerHTML = `
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Readings</div>
+          <div class="stat-value">${total}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Critical Events</div>
+          <div class="stat-value">${critical}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Warning States</div>
+          <div class="stat-value">${warnings}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Most Recent</div>
+          <div class="stat-value">${latest ? new Date(latest.created_at).toLocaleTimeString() : '--'}</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">Critical Events</div>
-        <div class="stat-value">12</div>
+      <div class="chart-card" style="margin-top: 24px; overflow-x: auto;">
+        <h5 class="chart-title">Recent Readings History</h5>
+        <table class="data-table" style="width: 100%; min-width: 720px; margin-top: 16px;">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Weight (kg)</th>
+              <th>Stress (%)</th>
+              <th>Tilt (°)</th>
+              <th>Vibration</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${historyRows || '<tr><td colspan="6" style="text-align:center; color:#A0AEC0;">No readings available for the selected period.</td></tr>'}
+          </tbody>
+        </table>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">Warnings</div>
-        <div class="stat-value">45</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Uptime</div>
-        <div class="stat-value">99.8%</div>
-      </div>
-    </div>
-  `;
+    `;
+  } catch (err) {
+    reportsContent.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Unable to load report history.</div><div class="empty-state-text">${err.message || 'Network or API error.'}</div></div>`;
+  }
 }
 
 // SETTINGS PAGE
@@ -351,21 +413,35 @@ async function loadSettings() {
     const response = await fetch(`${apiBase}/settings.php`);
     settings = await response.json();
   } catch (err) {
-    settings = defaultSettings;
+    settings = { ...defaultSettings };
   }
+  settings = { ...defaultSettings, ...settings };
   // map to UI sliders (HTML uses original slider ids)
-  document.getElementById('flexWarnSlider').value = settings.stress_threshold_warn ?? defaultSettings.stress_threshold_warn;
+  document.getElementById('flexWarnSlider').value = settings.stress_threshold_warn;
+  document.getElementById('stressWarnInput').value = settings.stress_threshold_warn ?? defaultSettings.stress_threshold_warn;
   document.getElementById('flexWarnValue').textContent = settings.stress_threshold_warn ?? defaultSettings.stress_threshold_warn;
   document.getElementById('flexCritSlider').value = settings.stress_threshold_crit ?? defaultSettings.stress_threshold_crit;
+  document.getElementById('stressCritInput').value = settings.stress_threshold_crit ?? defaultSettings.stress_threshold_crit;
   document.getElementById('flexCritValue').textContent = settings.stress_threshold_crit ?? defaultSettings.stress_threshold_crit;
   document.getElementById('vibeWarnSlider').value = settings.vibration_threshold_warn ?? defaultSettings.vibration_threshold_warn;
+  document.getElementById('vibeWarnInput').value = settings.vibration_threshold_warn ?? defaultSettings.vibration_threshold_warn;
   document.getElementById('vibeWarnValue').textContent = settings.vibration_threshold_warn ?? defaultSettings.vibration_threshold_warn;
   document.getElementById('vibeCritSlider').value = settings.vibration_threshold_crit ?? defaultSettings.vibration_threshold_crit;
+  document.getElementById('vibeCritInput').value = settings.vibration_threshold_crit ?? defaultSettings.vibration_threshold_crit;
   document.getElementById('vibeCritValue').textContent = settings.vibration_threshold_crit ?? defaultSettings.vibration_threshold_crit;
   document.getElementById('loadWarnSlider').value = settings.weight_threshold_warn ?? defaultSettings.weight_threshold_warn;
+  document.getElementById('loadWarnInput').value = settings.weight_threshold_warn ?? defaultSettings.weight_threshold_warn;
   document.getElementById('loadWarnValue').textContent = settings.weight_threshold_warn ?? defaultSettings.weight_threshold_warn;
   document.getElementById('loadCritSlider').value = settings.weight_threshold_crit ?? defaultSettings.weight_threshold_crit;
+  document.getElementById('loadCritInput').value = settings.weight_threshold_crit ?? defaultSettings.weight_threshold_crit;
   document.getElementById('loadCritValue').textContent = settings.weight_threshold_crit ?? defaultSettings.weight_threshold_crit;
+
+  document.getElementById('maxWeightBarSlider').value = settings.esp32_max_weight_bar_kg ?? defaultSettings.esp32_max_weight_bar_kg;
+  document.getElementById('maxWeightBarInput').value = settings.esp32_max_weight_bar_kg ?? defaultSettings.esp32_max_weight_bar_kg;
+  document.getElementById('maxWeightBarValue').textContent = settings.esp32_max_weight_bar_kg ?? defaultSettings.esp32_max_weight_bar_kg;
+  document.getElementById('maxStrainBridgeSlider').value = settings.esp32_max_strain_bridge_kg ?? defaultSettings.esp32_max_strain_bridge_kg;
+  document.getElementById('maxStrainBridgeInput').value = settings.esp32_max_strain_bridge_kg ?? defaultSettings.esp32_max_strain_bridge_kg;
+  document.getElementById('maxStrainBridgeValue').textContent = settings.esp32_max_strain_bridge_kg ?? defaultSettings.esp32_max_strain_bridge_kg;
 
   document.getElementById('refreshIntervalInput').value = settings.auto_refresh ?? defaultSettings.auto_refresh;
   document.getElementById('darkModeToggle').checked = settings.dark_mode ?? defaultSettings.dark_mode;
@@ -441,6 +517,7 @@ function updateConnectionStatus(status) {
   connStatusEl.className = cls;
   connStatusEl.innerHTML = `<span class="status-dot"></span>ESP-32 ${status}`;
   if (esp32SystemStatusEl) esp32SystemStatusEl.textContent = status;
+  if (tareBtn) tareBtn.disabled = status !== 'ONLINE';
 }
 
 async function fetchLatestReading() {
@@ -448,10 +525,16 @@ async function fetchLatestReading() {
     const res = await fetch(`${apiBase}/latest.php`);
     const json = await res.json();
     if (!json) return;
-    if (json.esp32_status) updateConnectionStatus(json.esp32_status);
-    if (json.reading) updateUI(json.reading);
+    const status = json.esp32_status || (json.is_online ? 'ONLINE' : 'OFFLINE');
+    updateConnectionStatus(status);
+    if (json.reading) {
+      updateUI(json.reading);
+    } else {
+      clearOfflineView();
+    }
   } catch (e) {
     updateConnectionStatus('OFFLINE');
+    clearOfflineView();
   }
 }
 
@@ -492,6 +575,19 @@ function setupEventListeners() {
   });
   
   document.getElementById('viewAlertsBtn')?.addEventListener('click', showAlertHistory);
+  document.getElementById('tareBtn')?.addEventListener('click', async () => {
+    try {
+      const response = await fetch(`${apiBase}/tare.php`, { method: 'POST' });
+      const result = await response.json();
+      if (result.success) {
+        toast?.success && toast.success('Tare request sent');
+      } else {
+        toast?.error && toast.error(result.message || 'Tare request failed');
+      }
+    } catch (err) {
+      toast?.error && toast.error('Tare request failed');
+    }
+  });
   
   document.querySelectorAll('.tab-button').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -505,33 +601,98 @@ function setupEventListeners() {
   });
   
   document.getElementById('flexWarnSlider')?.addEventListener('input', (e) => {
-    document.getElementById('flexWarnValue').textContent = e.target.value;
+    const value = e.target.value;
+    document.getElementById('flexWarnValue').textContent = value;
+    document.getElementById('stressWarnInput').value = value;
+  });
+  document.getElementById('stressWarnInput')?.addEventListener('input', (e) => {
+    const value = e.target.value;
+    document.getElementById('flexWarnValue').textContent = value;
+    document.getElementById('flexWarnSlider').value = value;
   });
   document.getElementById('flexCritSlider')?.addEventListener('input', (e) => {
-    document.getElementById('flexCritValue').textContent = e.target.value;
+    const value = e.target.value;
+    document.getElementById('flexCritValue').textContent = value;
+    document.getElementById('stressCritInput').value = value;
+  });
+  document.getElementById('stressCritInput')?.addEventListener('input', (e) => {
+    const value = e.target.value;
+    document.getElementById('flexCritValue').textContent = value;
+    document.getElementById('flexCritSlider').value = value;
   });
   document.getElementById('vibeWarnSlider')?.addEventListener('input', (e) => {
-    document.getElementById('vibeWarnValue').textContent = e.target.value;
+    const value = e.target.value;
+    document.getElementById('vibeWarnValue').textContent = value;
+    document.getElementById('vibeWarnInput').value = value;
+  });
+  document.getElementById('vibeWarnInput')?.addEventListener('input', (e) => {
+    const value = e.target.value;
+    document.getElementById('vibeWarnValue').textContent = value;
+    document.getElementById('vibeWarnSlider').value = value;
   });
   document.getElementById('vibeCritSlider')?.addEventListener('input', (e) => {
-    document.getElementById('vibeCritValue').textContent = e.target.value;
+    const value = e.target.value;
+    document.getElementById('vibeCritValue').textContent = value;
+    document.getElementById('vibeCritInput').value = value;
+  });
+  document.getElementById('vibeCritInput')?.addEventListener('input', (e) => {
+    const value = e.target.value;
+    document.getElementById('vibeCritValue').textContent = value;
+    document.getElementById('vibeCritSlider').value = value;
   });
   document.getElementById('loadWarnSlider')?.addEventListener('input', (e) => {
-    document.getElementById('loadWarnValue').textContent = e.target.value;
+    const value = e.target.value;
+    document.getElementById('loadWarnValue').textContent = value;
+    document.getElementById('loadWarnInput').value = value;
+  });
+  document.getElementById('loadWarnInput')?.addEventListener('input', (e) => {
+    const value = e.target.value;
+    document.getElementById('loadWarnValue').textContent = value;
+    document.getElementById('loadWarnSlider').value = value;
   });
   document.getElementById('loadCritSlider')?.addEventListener('input', (e) => {
-    document.getElementById('loadCritValue').textContent = e.target.value;
+    const value = e.target.value;
+    document.getElementById('loadCritValue').textContent = value;
+    document.getElementById('loadCritInput').value = value;
+  });
+  document.getElementById('loadCritInput')?.addEventListener('input', (e) => {
+    const value = e.target.value;
+    document.getElementById('loadCritValue').textContent = value;
+    document.getElementById('loadCritSlider').value = value;
+  });
+  
+  document.getElementById('maxWeightBarSlider')?.addEventListener('input', (e) => {
+    const value = e.target.value;
+    document.getElementById('maxWeightBarValue').textContent = value;
+    document.getElementById('maxWeightBarInput').value = value;
+  });
+  document.getElementById('maxWeightBarInput')?.addEventListener('input', (e) => {
+    const value = e.target.value;
+    document.getElementById('maxWeightBarValue').textContent = value;
+    document.getElementById('maxWeightBarSlider').value = value;
+  });
+  document.getElementById('maxStrainBridgeSlider')?.addEventListener('input', (e) => {
+    const value = e.target.value;
+    document.getElementById('maxStrainBridgeValue').textContent = value;
+    document.getElementById('maxStrainBridgeInput').value = value;
+  });
+  document.getElementById('maxStrainBridgeInput')?.addEventListener('input', (e) => {
+    const value = e.target.value;
+    document.getElementById('maxStrainBridgeValue').textContent = value;
+    document.getElementById('maxStrainBridgeSlider').value = value;
   });
   
   document.getElementById('saveSettingsBtn')?.addEventListener('click', async () => {
     const newSettings = {
       ...settings,
-      stress_threshold_warn: parseInt(document.getElementById('flexWarnSlider').value, 10),
-      stress_threshold_crit: parseInt(document.getElementById('flexCritSlider').value, 10),
-      vibration_threshold_warn: parseInt(document.getElementById('vibeWarnSlider').value, 10),
-      vibration_threshold_crit: parseInt(document.getElementById('vibeCritSlider').value, 10),
-      weight_threshold_warn: parseInt(document.getElementById('loadWarnSlider').value, 10),
-      weight_threshold_crit: parseInt(document.getElementById('loadCritSlider').value, 10),
+      stress_threshold_warn: parseInt(document.getElementById('stressWarnInput').value, 10),
+      stress_threshold_crit: parseInt(document.getElementById('stressCritInput').value, 10),
+      vibration_threshold_warn: parseInt(document.getElementById('vibeWarnInput').value, 10),
+      vibration_threshold_crit: parseInt(document.getElementById('vibeCritInput').value, 10),
+      weight_threshold_warn: parseInt(document.getElementById('loadWarnInput').value, 10),
+      weight_threshold_crit: parseInt(document.getElementById('loadCritInput').value, 10),
+      esp32_max_weight_bar_kg: parseFloat(document.getElementById('maxWeightBarInput').value),
+      esp32_max_strain_bridge_kg: parseFloat(document.getElementById('maxStrainBridgeInput').value),
       auto_refresh: parseInt(document.getElementById('refreshIntervalInput').value, 10),
       dark_mode: document.getElementById('darkModeToggle').checked,
       alerts_enabled: document.getElementById('alertsEnabledToggle').checked,

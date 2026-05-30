@@ -1,0 +1,16 @@
+{
+    "stress_threshold_warn": 30,
+    "stress_threshold_crit": 50,
+    "vibration_threshold_warn": 35,
+    "vibration_threshold_crit": 40,
+    "weight_threshold_warn": 10,
+    "weight_threshold_crit": 50,
+    "sound_enabled": true,
+    "auto_refresh": 2,
+    "dark_mode": true,
+    "alerts_enabled": true,
+    "esp32_max_weight_bar_kg": 35,
+    "esp32_max_strain_bridge_kg": 50,
+    "tilt_threshold_warn": 8,
+    "tilt_threshold_crit": 12
+}
